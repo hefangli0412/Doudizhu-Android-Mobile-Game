@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal" >
+      
+    <TextView
+        android:id="@+id/item_roomId"
+        android:layout_width="100dp"
+        android:layout_height="40dp"
+        android:layout_weight="1"
+        android:background="#86DE87"
+        android:gravity="center"
+        android:textColor="#000000"
+        android:textSize="15sp" />
+    
+     <ImageButton
+         android:id="@+id/item_joinButton"
+         android:layout_width="50dp"
+         android:layout_height="40dp"
+         android:layout_weight="1"
+         android:background="#FFE4B5"
+         android:clickable="true"
+         android:gravity="center"
+         android:text="JOIN"
+         android:textColor="#000000" />
+  	   
+</LinearLayout>

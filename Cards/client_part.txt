@@ -1,0 +1,1139 @@
+package com.example.cards;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
+
+import org.andengine.entity.scene.IOnSceneTouchListener;
+import org.andengine.entity.scene.Scene;
+import org.andengine.input.touch.TouchEvent;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import com.example.cards.CardAlg.Card;
+import com.example.cards.CardAlg.Deck;
+import com.example.cards.CardAlg.Hand;
+import com.shephertz.app42.gaming.multiplayer.client.WarpClient;
+import com.shephertz.app42.gaming.multiplayer.client.command.WarpResponseResultCode;
+import com.shephertz.app42.gaming.multiplayer.client.events.ChatEvent;
+import com.shephertz.app42.gaming.multiplayer.client.events.LiveRoomInfoEvent;
+import com.shephertz.app42.gaming.multiplayer.client.events.LobbyData;
+import com.shephertz.app42.gaming.multiplayer.client.events.MoveEvent;
+import com.shephertz.app42.gaming.multiplayer.client.events.RoomData;
+import com.shephertz.app42.gaming.multiplayer.client.events.RoomEvent;
+import com.shephertz.app42.gaming.multiplayer.client.events.UpdateEvent;
+import com.shephertz.app42.gaming.multiplayer.client.listener.NotifyListener;
+import com.shephertz.app42.gaming.multiplayer.client.listener.RoomRequestListener;
+
+import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.Context;
+import android.content.DialogInterface;
+import android.content.Intent;
+import android.os.Bundle;
+import android.util.Log;
+import android.view.GestureDetector;
+import android.view.GestureDetector.SimpleOnGestureListener;
+import android.view.KeyEvent;
+import android.view.MotionEvent;
+import android.view.View;
+import android.view.ViewManager;
+import android.view.Window;
+import android.view.WindowManager;
+import android.view.View.OnTouchListener;
+import android.view.animation.TranslateAnimation;
+import android.widget.Button;
+import android.widget.ImageView;
+import android.widget.RelativeLayout;
+import android.widget.TextView;
+
+import android.media.AudioManager;
+import android.media.SoundPool;
+
+public class Client_part extends Activity implements IOnSceneTouchListener, RoomRequestListener, NotifyListener
+{
+	//private Deck deck; // delete later
+	private static final int MAX_NUM_CARDS = 5;
+	private ArrayList<ImageView> cardList;
+	private static Map<CardStruct, ImageView> cardMap;
+	private TextView cardListMessage;
+	private Button skip;
+	private int Minvalue = 0;
+	private Context context;
+	private CardPosition[] positionArray;
+	private GestureDetector gdt;
+	private WarpClient theClient;
+	public String status = "0";
+	private String roomId = "";
+	private int currentStatus = 0 ; // this status is used for the message recevied from the server....Updtaed in the chatre...
+	float left = 0;
+	float gap =0;
+	float right =0;
+	
+	
+	//2014/11/05
+	static SoundPool sounds;
+	static int wrongsound;
+	
+	
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        this.requestWindowFeature(Window.FEATURE_NO_TITLE);
+		this.getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);	
+        setContentView(R.layout.client_part_layout);
+        
+  //      deck = new Deck(); // delete later
+        cardList = new ArrayList<ImageView>();
+        cardMap = new HashMap<CardStruct, ImageView>();
+        cardListMessage = (TextView) findViewById(R.id.cardlist);
+        skip = (Button) findViewById(R.id.skipbutton);
+        positionArray = new CardPosition[5];
+        gdt = new GestureDetector(new GestureListener());
+        
+        //yan's 2014/11/05
+        sounds=new SoundPool(10, AudioManager.STREAM_MUSIC,0);
+        wrongsound = sounds.load(this.getApplicationContext(), R.raw.nodear,1);
+        
+		initCardMap();
+		initPositionArray();
+        this.context = this;
+        skip.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                // Perform action on click
+            	//System.out.println("skip clicked!");
+            	currentStatus = 0;
+            	sendUpdateEvent("skip", null);
+            	InformPart("");
+            }
+        });
+        try{
+			theClient = WarpClient.getInstance();
+		}catch(Exception e){
+			e.printStackTrace();
+		}
+		Intent intent = getIntent();
+		roomId = intent.getStringExtra("roomId");
+		init(roomId);
+    }
+    private void InformPart(final String st) {
+    	runOnUiThread(new Runnable() {
+
+			@Override
+			public void run() {
+				cardListMessage.setText(st);
+			}
+    		
+    	});
+    
+    }
+    private void init(String roomId){
+		if(theClient!=null){
+			theClient.addRoomRequestListener(this);
+			theClient.addNotificationListener(this);
+			theClient.joinRoom(roomId);
+		}
+	}
+	private void refillCards(String cardsFromServer) {
+		RelativeLayout mLayout = (RelativeLayout)findViewById(R.id.client_layout);
+		String[] tmpcard_array = cardsFromServer.split(";");
+		int cardindex = 0;
+		for(int i = 0; i < MAX_NUM_CARDS; i++) {
+			ImageView cardView = positionArray[i].card;
+			if (cardView == null) {
+				try
+				{
+				final Card c = Utils.getCardByString(tmpcard_array[cardindex]);
+				if(c == null)
+				{
+					//System.out.println("this is in the refill, and the card is null. card index+" + cardindex);
+					return ;
+				}
+				cardindex++;
+				ImageView cv = cardMap.get(new CardStruct(c.getValue(), c.getSuit()));
+				//System.out.println(cv.toString());
+				cardList.add(cv);
+				runOnUiThread(new RunnableClass(i,cv,mLayout,c));
+				}
+				catch(Exception e){
+					e.printStackTrace();
+				}
+			}
+		}
+	}
+    
+    private void initPositionArray() {
+    	CardPosition cp0 = new CardPosition(200, 80);
+    	CardPosition cp1 = new CardPosition(200, 80 + 140);
+    	CardPosition cp2 = new CardPosition(200, 80 + 140 * 2);
+    	CardPosition cp3 = new CardPosition(200, 80 + 140 * 3);
+    	CardPosition cp4 = new CardPosition(200, 80 + 140 * 4);
+    	positionArray[0] = cp0;
+    	positionArray[1] = cp1;
+    	positionArray[2] = cp2;
+    	positionArray[3] = cp3;
+    	positionArray[4] = cp4;
+    }
+    private CardStruct getCardStruct(int id) {
+		CardStruct cs;
+
+		switch (id) {
+		case R.drawable.clubs_10:
+			cs = new CardStruct(10, 4);
+			break;
+		case R.drawable.clubs_2:
+			cs = new CardStruct(2, 4);
+			break;
+		case R.drawable.clubs_3:
+			cs = new CardStruct(3, 4);
+			break;
+		case R.drawable.clubs_4:
+			cs = new CardStruct(4, 4);
+			break;
+		case R.drawable.clubs_5:
+			cs = new CardStruct(5, 4);
+			break;
+		case R.drawable.clubs_6:
+			cs = new CardStruct(6, 4);
+			break;
+		case R.drawable.clubs_7:
+			cs = new CardStruct(7, 4);
+			break;
+		case R.drawable.clubs_8:
+			cs = new CardStruct(8, 4);
+			break;
+		case R.drawable.clubs_9:
+			cs = new CardStruct(9, 4);
+			break;
+		case R.drawable.clubs_ace:
+			cs = new CardStruct(1, 4);
+			break;
+		case R.drawable.clubs_jack:
+			cs = new CardStruct(11, 4);
+			break;
+		case R.drawable.clubs_king:
+			cs = new CardStruct(13, 4);
+			break;
+		case R.drawable.clubs_queen:
+			cs = new CardStruct(12, 4);
+			break;
+			
+		case R.drawable.diamonds_10:
+			cs = new CardStruct(10, 3);
+			break;
+		case R.drawable.diamonds_2:
+			cs = new CardStruct(2, 3);
+			break;
+		case R.drawable.diamonds_3:
+			cs = new CardStruct(3, 3);
+			break;
+		case R.drawable.diamonds_4:
+			cs = new CardStruct(4, 3);
+			break;
+		case R.drawable.diamonds_5:
+			cs = new CardStruct(5, 3);
+			break;
+		case R.drawable.diamonds_6:
+			cs = new CardStruct(6, 3);
+			break;
+		case R.drawable.diamonds_7:
+			cs = new CardStruct(7, 3);
+			break;
+		case R.drawable.diamonds_8:
+			cs = new CardStruct(8, 3);
+			break;
+		case R.drawable.diamonds_9:
+			cs = new CardStruct(9, 3);
+			break;
+		case R.drawable.diamonds_ace:
+			cs = new CardStruct(1, 3);
+			break;
+		case R.drawable.diamonds_jack:
+			cs = new CardStruct(11, 3);
+			break;
+		case R.drawable.diamonds_king:
+			cs = new CardStruct(13, 3);
+			break;
+		case R.drawable.diamonds_queen:
+			cs = new CardStruct(12, 3);
+			break;
+			
+		case R.drawable.hearts_10:
+			cs = new CardStruct(10, 2);
+			break;
+		case R.drawable.hearts_2:
+			cs = new CardStruct(2, 2);
+			break;
+		case R.drawable.hearts_3:
+			cs = new CardStruct(3, 2);
+			break;
+		case R.drawable.hearts_4:
+			cs = new CardStruct(4, 2);
+			break;
+		case R.drawable.hearts_5:
+			cs = new CardStruct(5, 2);
+			break;
+		case R.drawable.hearts_6:
+			cs = new CardStruct(6, 2);
+			break;
+		case R.drawable.hearts_7:
+			cs = new CardStruct(7, 2);
+			break;
+		case R.drawable.hearts_8:
+			cs = new CardStruct(8, 2);
+			break;
+		case R.drawable.hearts_9:
+			cs = new CardStruct(9, 2);
+			break;
+		case R.drawable.hearts_ace:
+			cs = new CardStruct(1, 2);
+			break;
+		case R.drawable.hearts_jack:
+			cs = new CardStruct(11, 2);
+			break;
+		case R.drawable.hearts_king:
+			cs = new CardStruct(13, 2);
+			break;
+		case R.drawable.hearts_queen:
+			cs = new CardStruct(12, 2);
+			break;
+			
+		case R.drawable.spades_10:
+			cs = new CardStruct(10, 1);
+			break;
+		case R.drawable.spades_2:
+			cs = new CardStruct(2, 1);
+			break;
+		case R.drawable.spades_3:
+			cs = new CardStruct(3, 1);
+			break;
+		case R.drawable.spades_4:
+			cs = new CardStruct(4, 1);
+			break;
+		case R.drawable.spades_5:
+			cs = new CardStruct(5, 1);
+			break;
+		case R.drawable.spades_6:
+			cs = new CardStruct(6, 1);
+			break;
+		case R.drawable.spades_7:
+			cs = new CardStruct(7, 1);
+			break;
+		case R.drawable.spades_8:
+			cs = new CardStruct(8, 1);
+			break;
+		case R.drawable.spades_9:
+			cs = new CardStruct(9, 1);
+			break;
+		case R.drawable.spades_ace:
+			cs = new CardStruct(1, 1);
+			break;
+		case R.drawable.spades_jack:
+			cs = new CardStruct(11, 1);
+			break;
+		case R.drawable.spades_king:
+			cs = new CardStruct(13, 1);
+			break;
+		case R.drawable.spades_queen:
+			cs = new CardStruct(12, 1);
+			break;
+			
+		default:
+			cs = null;
+		}
+		
+		return cs;
+    }
+
+    
+    private void initCardMap() {
+    	ImageView clubs_10 = new ImageView(this);
+    	clubs_10.setImageResource(R.drawable.clubs_10);
+    	clubs_10.setTag(R.drawable.clubs_10);
+    	cardMap.put(new CardStruct(10, 4), clubs_10);
+    	
+    	ImageView clubs_2 = new ImageView(this);
+    	clubs_2.setImageResource(R.drawable.clubs_2);
+    	clubs_2.setTag(R.drawable.clubs_2);
+    	cardMap.put(new CardStruct(2, 4), clubs_2);
+    	
+    	ImageView clubs_3 = new ImageView(this);
+    	clubs_3.setImageResource(R.drawable.clubs_3);
+    	clubs_3.setTag(R.drawable.clubs_3);
+    	cardMap.put(new CardStruct(3, 4), clubs_3);
+    	
+    	ImageView clubs_4 = new ImageView(this);
+    	clubs_4.setImageResource(R.drawable.clubs_4);
+    	clubs_4.setTag(R.drawable.clubs_4);
+    	cardMap.put(new CardStruct(4, 4), clubs_4);
+    	
+    	ImageView clubs_5 = new ImageView(this);
+    	clubs_5.setImageResource(R.drawable.clubs_5);
+    	clubs_5.setTag(R.drawable.clubs_5);
+    	cardMap.put(new CardStruct(5, 4), clubs_5);
+    	
+    	ImageView clubs_6 = new ImageView(this);
+    	clubs_6.setImageResource(R.drawable.clubs_6);
+    	clubs_6.setTag(R.drawable.clubs_6);
+    	cardMap.put(new CardStruct(6, 4), clubs_6);
+    	
+    	ImageView clubs_7 = new ImageView(this);
+    	clubs_7.setImageResource(R.drawable.clubs_7);
+    	clubs_7.setTag(R.drawable.clubs_7);
+    	cardMap.put(new CardStruct(7, 4), clubs_7);
+    	
+    	ImageView clubs_8 = new ImageView(this);
+    	clubs_8.setImageResource(R.drawable.clubs_8);
+    	clubs_8.setTag(R.drawable.clubs_8);
+    	cardMap.put(new CardStruct(8, 4), clubs_8);
+    	
+    	ImageView clubs_9 = new ImageView(this);
+    	clubs_9.setImageResource(R.drawable.clubs_9);
+    	clubs_9.setTag(R.drawable.clubs_9);
+    	cardMap.put(new CardStruct(9, 4), clubs_9);
+    	
+    	ImageView clubs_ace = new ImageView(this);
+    	clubs_ace.setImageResource(R.drawable.clubs_ace);
+    	clubs_ace.setTag(R.drawable.clubs_ace);
+    	cardMap.put(new CardStruct(1, 4), clubs_ace);
+    	
+    	ImageView clubs_jack = new ImageView(this);
+    	clubs_jack.setImageResource(R.drawable.clubs_jack);
+    	clubs_jack.setTag(R.drawable.clubs_jack);
+    	cardMap.put(new CardStruct(11, 4), clubs_jack);
+    	
+    	ImageView clubs_king = new ImageView(this);
+    	clubs_king.setImageResource(R.drawable.clubs_king);
+    	clubs_king.setTag(R.drawable.clubs_king);
+    	cardMap.put(new CardStruct(13, 4), clubs_king);
+    	
+    	ImageView clubs_queen = new ImageView(this);
+    	clubs_queen.setImageResource(R.drawable.clubs_queen);
+    	clubs_queen.setTag(R.drawable.clubs_queen);
+    	cardMap.put(new CardStruct(12, 4), clubs_queen);
+    	
+    	ImageView diamonds_10 = new ImageView(this);
+    	diamonds_10.setImageResource(R.drawable.diamonds_10);
+    	diamonds_10.setTag(R.drawable.diamonds_10);
+    	cardMap.put(new CardStruct(10, 3), diamonds_10);
+    	
+    	ImageView diamonds_2 = new ImageView(this);
+    	diamonds_2.setImageResource(R.drawable.diamonds_2);
+    	diamonds_2.setTag(R.drawable.diamonds_2);
+    	cardMap.put(new CardStruct(2, 3), diamonds_2);
+    	
+    	ImageView diamonds_3 = new ImageView(this);
+    	diamonds_3.setImageResource(R.drawable.diamonds_3);
+    	diamonds_3.setTag(R.drawable.diamonds_3);
+    	cardMap.put(new CardStruct(3, 3), diamonds_3);
+    	
+    	ImageView diamonds_4 = new ImageView(this);
+    	diamonds_4.setImageResource(R.drawable.diamonds_4);
+    	diamonds_4.setTag(R.drawable.diamonds_4);
+    	cardMap.put(new CardStruct(4, 3), diamonds_4);
+    	
+    	ImageView diamonds_5 = new ImageView(this);
+    	diamonds_5.setImageResource(R.drawable.diamonds_5);
+    	diamonds_5.setTag(R.drawable.diamonds_5);
+    	cardMap.put(new CardStruct(5, 3), diamonds_5);
+    	
+    	ImageView diamonds_6 = new ImageView(this);
+    	diamonds_6.setImageResource(R.drawable.diamonds_6);
+    	diamonds_6.setTag(R.drawable.diamonds_6);
+    	cardMap.put(new CardStruct(6, 3), diamonds_6);
+    	
+    	ImageView diamonds_7 = new ImageView(this);
+    	diamonds_7.setImageResource(R.drawable.diamonds_7);
+    	diamonds_7.setTag(R.drawable.diamonds_7);
+    	cardMap.put(new CardStruct(7, 3), diamonds_7);
+    	
+    	ImageView diamonds_8 = new ImageView(this);
+    	diamonds_8.setImageResource(R.drawable.diamonds_8);
+    	diamonds_8.setTag(R.drawable.diamonds_8);
+    	cardMap.put(new CardStruct(8, 3), diamonds_8);
+    	
+    	ImageView diamonds_9 = new ImageView(this);
+    	diamonds_9.setImageResource(R.drawable.diamonds_9);
+    	diamonds_9.setTag(R.drawable.diamonds_9);
+    	cardMap.put(new CardStruct(9, 3), diamonds_9);
+    	
+    	ImageView diamonds_ace = new ImageView(this);
+    	diamonds_ace.setImageResource(R.drawable.diamonds_ace);
+    	diamonds_ace.setTag(R.drawable.diamonds_ace);
+    	cardMap.put(new CardStruct(1, 3), diamonds_ace);
+    	
+    	ImageView diamonds_jack = new ImageView(this);
+    	diamonds_jack.setImageResource(R.drawable.diamonds_jack);
+    	diamonds_jack.setTag(R.drawable.diamonds_jack);
+    	cardMap.put(new CardStruct(11, 3), diamonds_jack);
+    	
+    	ImageView diamonds_king = new ImageView(this);
+    	diamonds_king.setImageResource(R.drawable.diamonds_king);
+    	diamonds_king.setTag(R.drawable.diamonds_king);
+    	cardMap.put(new CardStruct(13, 3), diamonds_king);
+    	
+    	ImageView diamonds_queen = new ImageView(this);
+    	diamonds_queen.setImageResource(R.drawable.diamonds_queen);
+    	diamonds_queen.setTag(R.drawable.diamonds_queen);
+    	cardMap.put(new CardStruct(12, 3), diamonds_queen);
+    	
+    	ImageView hearts_10 = new ImageView(this);
+    	hearts_10.setImageResource(R.drawable.hearts_10);
+    	hearts_10.setTag(R.drawable.hearts_10);
+    	cardMap.put(new CardStruct(10, 2), hearts_10);
+    	
+    	ImageView hearts_2 = new ImageView(this);
+    	hearts_2.setImageResource(R.drawable.hearts_2);
+    	hearts_2.setTag(R.drawable.hearts_2);
+    	cardMap.put(new CardStruct(2, 2), hearts_2);
+    	
+    	ImageView hearts_3 = new ImageView(this);
+    	hearts_3.setImageResource(R.drawable.hearts_3);
+    	hearts_3.setTag(R.drawable.hearts_3);
+    	cardMap.put(new CardStruct(3, 2), hearts_3);
+    	
+    	ImageView hearts_4 = new ImageView(this);
+    	hearts_4.setImageResource(R.drawable.hearts_4);
+    	hearts_4.setTag(R.drawable.hearts_4);
+    	cardMap.put(new CardStruct(4, 2), hearts_4);
+    	
+    	ImageView hearts_5 = new ImageView(this);
+    	hearts_5.setImageResource(R.drawable.hearts_5);
+    	hearts_5.setTag(R.drawable.hearts_5);
+    	cardMap.put(new CardStruct(5, 2), hearts_5);
+    	
+    	ImageView hearts_6 = new ImageView(this);
+    	hearts_6.setImageResource(R.drawable.hearts_6);
+    	hearts_6.setTag(R.drawable.hearts_6);
+    	cardMap.put(new CardStruct(6, 2), hearts_6);
+    	
+    	ImageView hearts_7 = new ImageView(this);
+    	hearts_7.setImageResource(R.drawable.hearts_7);
+    	hearts_7.setTag(R.drawable.hearts_7);
+    	cardMap.put(new CardStruct(7, 2), hearts_7);
+    	
+    	ImageView hearts_8 = new ImageView(this);
+    	hearts_8.setImageResource(R.drawable.hearts_8);
+    	hearts_8.setTag(R.drawable.hearts_8);
+    	cardMap.put(new CardStruct(8, 2), hearts_8);
+    	
+    	ImageView hearts_9 = new ImageView(this);
+    	hearts_9.setImageResource(R.drawable.hearts_9);
+    	hearts_9.setTag(R.drawable.hearts_9);
+    	cardMap.put(new CardStruct(9, 2), hearts_9);
+    	
+    	ImageView hearts_ace = new ImageView(this);
+    	hearts_ace.setImageResource(R.drawable.hearts_ace);
+    	hearts_ace.setTag(R.drawable.hearts_ace);
+    	cardMap.put(new CardStruct(1, 2), hearts_ace);
+    	
+    	ImageView hearts_jack = new ImageView(this);
+    	hearts_jack.setImageResource(R.drawable.hearts_jack);
+    	hearts_jack.setTag(R.drawable.hearts_jack);
+    	cardMap.put(new CardStruct(11, 2), hearts_jack);
+    	
+    	ImageView hearts_king = new ImageView(this);
+    	hearts_king.setImageResource(R.drawable.hearts_king);
+    	hearts_king.setTag(R.drawable.hearts_king);
+    	cardMap.put(new CardStruct(13, 2), hearts_king);
+    	
+    	ImageView hearts_queen = new ImageView(this);
+    	hearts_queen.setImageResource(R.drawable.hearts_queen);
+    	hearts_queen.setTag(R.drawable.hearts_queen);
+    	cardMap.put(new CardStruct(12, 2), hearts_queen);
+    	
+    	ImageView spades_10 = new ImageView(this);
+    	spades_10.setImageResource(R.drawable.spades_10);
+    	spades_10.setTag(R.drawable.spades_10);
+    	cardMap.put(new CardStruct(10, 1), spades_10);
+    	
+    	ImageView spades_2 = new ImageView(this);
+    	spades_2.setImageResource(R.drawable.spades_2);
+    	spades_2.setTag(R.drawable.spades_2);
+    	cardMap.put(new CardStruct(2, 1), spades_2);
+    	
+    	ImageView spades_3 = new ImageView(this);
+    	spades_3.setImageResource(R.drawable.spades_3);
+    	spades_3.setTag(R.drawable.spades_3);
+    	cardMap.put(new CardStruct(3, 1), spades_3);
+    	
+    	ImageView spades_4 = new ImageView(this);
+    	spades_4.setImageResource(R.drawable.spades_4);
+    	spades_4.setTag(R.drawable.spades_4);
+    	cardMap.put(new CardStruct(4, 1), spades_4);
+    	
+    	ImageView spades_5 = new ImageView(this);
+    	spades_5.setImageResource(R.drawable.spades_5);
+    	spades_5.setTag(R.drawable.spades_5);
+    	cardMap.put(new CardStruct(5, 1), spades_5);
+    	
+    	ImageView spades_6 = new ImageView(this);
+    	spades_6.setImageResource(R.drawable.spades_6);
+    	spades_6.setTag(R.drawable.spades_6);
+    	cardMap.put(new CardStruct(6, 1), spades_6);
+    	
+    	ImageView spades_7 = new ImageView(this);
+    	spades_7.setImageResource(R.drawable.spades_7);
+    	spades_7.setTag(R.drawable.spades_7);
+    	cardMap.put(new CardStruct(7, 1), spades_7);
+    	
+    	ImageView spades_8 = new ImageView(this);
+    	spades_8.setImageResource(R.drawable.spades_8);
+    	spades_8.setTag(R.drawable.spades_8);
+    	cardMap.put(new CardStruct(8, 1), spades_8);
+    	
+    	ImageView spades_9 = new ImageView(this);
+    	spades_9.setImageResource(R.drawable.spades_9);
+    	spades_9.setTag(R.drawable.spades_9);
+    	cardMap.put(new CardStruct(9, 1), spades_9);
+    	
+    	ImageView spades_ace = new ImageView(this);
+    	spades_ace.setImageResource(R.drawable.spades_ace);
+    	spades_ace.setTag(R.drawable.spades_ace);
+    	cardMap.put(new CardStruct(1, 1), spades_ace);
+    	
+    	ImageView spades_jack = new ImageView(this);
+    	spades_jack.setImageResource(R.drawable.spades_jack);
+    	spades_jack.setTag(R.drawable.spades_jack);
+    	cardMap.put(new CardStruct(11, 1), spades_jack);
+    	
+    	ImageView spades_king = new ImageView(this);
+    	spades_king.setImageResource(R.drawable.spades_king);
+    	spades_king.setTag(R.drawable.spades_king);
+    	cardMap.put(new CardStruct(13, 1), spades_king);
+    	
+    	ImageView spades_queen = new ImageView(this);
+    	spades_queen.setImageResource(R.drawable.spades_queen);
+    	spades_queen.setTag(R.drawable.spades_queen);
+    	cardMap.put(new CardStruct(12, 1), spades_queen);
+    }
+
+    /*
+     * helper class -- gesture listener
+     */
+    
+    private static final int SWIPE_MIN_DISTANCE = 10;
+    private static final int SWIPE_THRESHOLD_VELOCITY = 200;
+    
+    private class GestureListener extends SimpleOnGestureListener {
+        @Override
+        public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
+            if(e1.getX() - e2.getX() > SWIPE_MIN_DISTANCE && Math.abs(velocityX) > SWIPE_THRESHOLD_VELOCITY) {
+            	//System.out.println("Left");
+                return true; // Right to left
+            }  else if (e2.getX() - e1.getX() > SWIPE_MIN_DISTANCE && Math.abs(velocityX) > SWIPE_THRESHOLD_VELOCITY) {
+            	//System.out.println("Right");
+                return true; // Left to right
+            }
+
+            if(e1.getY() - e2.getY() > SWIPE_MIN_DISTANCE && Math.abs(velocityY) > SWIPE_THRESHOLD_VELOCITY) {
+            	//System.out.println("Top");
+                return true; // Bottom to top
+            }  else if (e2.getY() - e1.getY() > SWIPE_MIN_DISTANCE && Math.abs(velocityY) > SWIPE_THRESHOLD_VELOCITY) {
+            	//System.out.println("Bottom");
+                return true; // Top to bottom
+            }
+            return false;
+        }
+        
+        public boolean onSingleTapConfirmed(MotionEvent e) {
+        	//System.out.println("tapped!");
+            return super.onSingleTapConfirmed(e);
+        }
+        
+    }
+    
+    /*
+     * helper class -- card structure
+     */
+    
+    private class CardStruct {
+    	public int value;
+    	public int suit;
+    	
+    	public CardStruct (int v, int s) {
+    		value = v;
+    		suit = s;
+    	}
+    	
+    	@Override
+    	   public int hashCode() {
+    	       return value * 10 + suit;
+    	   }
+    		
+    	@Override
+    	public boolean equals(Object obj) {
+    		if (this == obj)
+    			return true;
+    		if (obj == null || this.getClass() != obj.getClass()) {
+    			return false;
+    		}
+    		CardStruct other = (CardStruct) obj;
+
+    		return (this.value == other.value && this.suit == other.suit); 
+    	}
+    }
+
+    /*
+     * helper class -- card position structure
+     */
+    
+    private class CardPosition {
+    	public int top;
+    	public int left;
+    	public ImageView card;
+
+    	public CardPosition (int top, int left) {
+    		this.top = top;
+    		this.left = left;
+    		this.card = null;
+    	}
+    }
+	public void onChatReceived(ChatEvent event) {
+		// TODO Auto-generated method stub
+		String sender = event.getSender();	
+		String message = event.getMessage();
+		//System.out.println(message);
+	if(!sender.equals( Utils.userName))
+		{
+			String model;
+			try {
+				
+				JSONObject jsonObject= new JSONObject(message); 
+				String username = (String)jsonObject.get("username");
+				model = (String)jsonObject.get("model");
+				
+				if(username.equals(Utils.userName))
+				{
+					
+					if(model.equals("1"))
+					{
+						System.out.println(Utils.userName+": Messaged received from server! "+sender+" sends "+message);			
+						
+						this.status = (String)jsonObject.get("status"); //must be here.
+						if(status.equals("5"))
+						{
+							///////this part is used for information ""
+							InformPart("It is your turn!");
+							 this.currentStatus = 5;
+							 Minvalue= (int)jsonObject.get("roundmin");
+							 //System.out.println("minvalue is updated :"+Minvalue);
+						}
+						if(status.equals("3"))
+						{
+							/*mainview.newhand = tmpplayer;
+							mainview.Resetcardsposition();*/
+						}
+						if(status.equals("20"))//ask player to add a new card
+						{
+							
+							InformPart("Game begin!");
+							String tmpcard = (String)jsonObject.get("card");
+						
+							this.refillCards(tmpcard);
+							sendUpdateEvent("updateinformation", "updateinformation");
+						
+						}
+						
+						if(status.equals("21"))//clean the cards we have... add this flag to number 23!!!!
+						{
+							//2014/11/05
+							int remain=0;
+							for(int i = 0; i < MAX_NUM_CARDS; i++){
+								ImageView cardView = positionArray[i].card;
+								if (cardView != null) remain+=1;
+							}
+							
+							System.out.println(Utils.userName+": remain "+remain+" cards.");
+							System.out.println(Utils.userName+": cleaning cards...");
+							//2014/11/05 done
+							
+							for(int i = 0; i < MAX_NUM_CARDS; i++) {
+								ImageView cardView = positionArray[i].card;
+								if (cardView != null) {
+									TranslateAnimation anim = new TranslateAnimation(0, 0, 0, 700);
+									anim.setDuration(500);
+									anim.setFillEnabled(true);
+									anim.setFillAfter(true);
+									//cardView.startAnimation(anim);//yan's modifications!!!!!
+
+									//2014/11/05
+									final ImageView cardView2=cardView;
+									final TranslateAnimation anim2=anim;
+									runOnUiThread(new Runnable() {
+
+										@Override
+										public void run() {
+											
+											//2014/11/05
+											//positionArray[i].card = null
+											cardView2.startAnimation(anim2);
+											//cardView2.setVisibility(0);
+										}
+							    		
+							    	});
+									
+									//2014/11/05
+									//positionArray[i].card = null
+									positionArray[i].card=null;	
+								}
+						}
+							//2014/11/05
+							//positionArray[i].card = null
+							
+							int remain2=0;
+							for(int i = 0; i < MAX_NUM_CARDS; i++){
+								ImageView cardView = positionArray[i].card;
+								if (cardView != null) remain2+=1;
+							}
+							
+							System.out.println(Utils.userName+": after clean, remain "+remain2+" cards.");
+							//2014/11/05 done
+							
+
+
+							
+							return ; 
+						}
+						
+						if(status.equals("22"))
+						{
+							String tmpcard = (String)jsonObject.get("card");
+							InformPart(tmpcard);
+						}
+
+						if(status.equals("23"))
+						{
+					        Intent intent = new Intent();
+					        intent.putExtra("name","LeiPei");    
+					        intent.setClass(context, Cards1.class);
+					        context.startActivity(intent);
+					        ((Activity) context).finish();
+						}
+				    }
+				
+				}
+
+			} catch (JSONException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+	
+	
+	}
+	void sendUpdateEvent(String action, String sendcard){
+			try{		
+				JSONObject json=new JSONObject();  
+		    	Map<String, Object> map = new HashMap<String, Object>();	    	
+		    	json.put("model", "2");
+		    	json.put("username", Utils.userName);
+				if(action.equals("skip"))
+				{
+					json.put("action", "skip");
+					json.put("card",null);
+				}
+				else if(action.equals("sendcard"))
+				{
+					json.put("action", "sendcard");
+					json.put("card",sendcard);
+				}
+				else if(action.equals("updateinformation"))
+				{
+					json.put("action", "updateinformation");
+					json.put("card",sendcard);
+				}
+				else if (action.equals("Finish"))
+				{
+					json.put("action", "Finish");
+					json.put("card",sendcard);
+				}
+				else if (action.equals("QUIT"))
+				{
+					json.put("action", "QUIT");
+					json.put("card",null);
+				}
+		    	System.out.println(json.toString());
+		    	theClient.sendChat(json.toString());
+		}catch(Exception e){
+			Log.d("sendUpdateEvent", e.getMessage());
+		}
+	}
+	@Override
+	public void onGameStarted(String arg0, String arg1, String arg2) {
+		// TODO Auto-generated method stub
+		
+	}
+	@Override
+	public void onGameStopped(String arg0, String arg1) {
+		// TODO Auto-generated method stub
+		
+	}
+	@Override
+	public void onMoveCompleted(MoveEvent arg0) {
+		// TODO Auto-generated method stub
+		
+	}
+	@Override
+	public void onPrivateChatReceived(String arg0, String arg1) {
+		// TODO Auto-generated method stub
+		
+	}
+	@Override
+	public void onRoomCreated(RoomData arg0) {
+		// TODO Auto-generated method stub
+		
+	}
+	@Override
+	public void onRoomDestroyed(RoomData arg0) {
+		// TODO Auto-generated method stub
+		
+	}
+	@Override
+	public void onUpdatePeersReceived(UpdateEvent arg0) {
+		// TODO Auto-generated method stub
+		
+	}
+	@Override
+	public void onUserChangeRoomProperty(RoomData arg0, String arg1,
+			HashMap<String, Object> arg2, HashMap<String, String> arg3) {
+		// TODO Auto-generated method stub
+		
+	}
+	@Override
+	public void onUserJoinedLobby(LobbyData arg0, String arg1) {
+		// TODO Auto-generated method stub
+		
+	}
+	@Override
+	public void onUserJoinedRoom(RoomData arg0, String arg1) {
+		// TODO Auto-generated method stub
+		
+	}
+	@Override
+	public void onUserLeftLobby(LobbyData arg0, String arg1) {
+		// TODO Auto-generated method stub
+		
+	}
+	@Override
+	public void onUserLeftRoom(RoomData arg0, String arg1) {
+		// TODO Auto-generated method stub
+		
+	}
+	@Override
+	public void onUserPaused(String arg0, boolean arg1, String arg2) {
+		// TODO Auto-generated method stub
+		
+	}
+	@Override
+	public void onUserResumed(String arg0, boolean arg1, String arg2) {
+		// TODO Auto-generated method stub
+		
+	}
+	@Override
+	public void onGetLiveRoomInfoDone(LiveRoomInfoEvent arg0) {
+		// TODO Auto-generated method stub
+		
+	}
+	@Override
+	public void onJoinRoomDone(RoomEvent event) {
+		if(event.getResult()==WarpResponseResultCode.SUCCESS){
+			theClient.subscribeRoom(roomId);
+		}else{
+			Utils.showToastOnUIThread(this, "onJoinRoomDone: Failed "+event.getResult());
+		}
+	}
+	@Override
+	public void onLeaveRoomDone(RoomEvent arg0) {
+		// TODO Auto-generated method stub
+		
+	}
+	@Override
+	public void onLockPropertiesDone(byte arg0) {
+		// TODO Auto-generated method stub
+		
+	}
+	@Override
+	public void onSetCustomRoomDataDone(LiveRoomInfoEvent arg0) {
+		// TODO Auto-generated method stub
+		
+	}
+	@Override
+	public void onSubscribeRoomDone(RoomEvent event) {
+		if(event.getResult()==WarpResponseResultCode.SUCCESS){
+			theClient.getLiveRoomInfo(roomId);
+		}else{
+			Utils.showToastOnUIThread(this, "onSubscribeRoomDone: Failed "+event.getResult());
+		}
+	}
+	@Override
+	public void onUnSubscribeRoomDone(RoomEvent arg0) {
+		// TODO Auto-generated method stub
+		
+	}
+	@Override
+	public void onUnlockPropertiesDone(byte arg0) {
+		// TODO Auto-generated method stub
+		
+	}
+	@Override
+	public void onUpdatePropertyDone(LiveRoomInfoEvent arg0) {
+		// TODO Auto-generated method stub
+		
+	}
+	@Override
+	public boolean onSceneTouchEvent(Scene pScene, TouchEvent pSceneTouchEvent) {
+		// TODO Auto-generated method stub
+		return false;
+	}
+	
+	private class RunnableClass implements Runnable {
+		private int i;
+		private ImageView cv;
+		private RelativeLayout mLayout;
+		private Card currentCard;
+		
+		RunnableClass(int i, ImageView cv, RelativeLayout mLayout, Card currentCard) {
+			this.i = i;
+			this.cv = cv;
+			this.mLayout = mLayout;
+			this.currentCard = currentCard;
+		}
+
+		@Override
+		public void run() {
+			// TODO Auto-generated method stub
+			
+			
+			//2014/11/10
+			//view not deleted problem!!!!!!!!!!! delete after next!!!!!!!
+			System.out.println("Before Removing!");
+			if(cv.getParent() != null) {
+	             ((ViewManager) cv.getParent()).removeView(cv);
+	         }
+			System.out.println("After Removing!");
+			
+			
+			mLayout.addView(cv);
+			cv.setX(positionArray[i].left);
+			cv.setY(positionArray[i].top);
+			positionArray[i].card = cv;
+			cv.setOnTouchListener(new OnTouchListener() {
+				@Override
+				public boolean onTouch(final View view, final MotionEvent event) {
+					
+					//2014/11/05
+					InformPart("");
+					//System.out.println(currentStatus+" +hhhh+ "+Minvalue);
+					if(currentStatus != 5)
+					{
+						InformPart("It is not your turn!");
+					}
+					else if(currentCard.getValue() <= Minvalue)
+					{
+						sounds.play(wrongsound, 1.0f,1.0f, 0, 0, 0.95f);
+						InformPart("Please choose another card");
+						
+						//2014/11/05, oh dear!!!!
+						
+					}
+					else if (gdt.onTouchEvent(event)) {
+						
+						//System.out.println("now send the card touch event: ");
+						Object tag = view.getTag();
+						int id = tag == null? -1 : Integer.parseInt(tag.toString());
+						CardStruct cs = getCardStruct(id); 
+						
+						//2014/11/09
+						// compare if card is bigger enough to be sent out
+						//sendUpdateEvent("sendcard", currentCard.toString());
+						
+						//2014/11/05
+						//currentStatus = 0;
+						// if yes, translate animation
+						//System.out.println("translation called");
+						TranslateAnimation anim = new TranslateAnimation(0, 0, 0, -700);
+						anim.setDuration(1000);
+						anim.setFillEnabled(true);
+						anim.setFillAfter(true);
+						view.startAnimation(anim);
+						// send out message to server
+						InformPart("");
+						// remove from cardList
+						cardList.remove(view);
+						// remove from positionArray
+						
+						//2014/11/09
+						// compare if card is bigger enough to be sent out
+						sendUpdateEvent("sendcard", currentCard.toString());
+						
+						currentStatus = 0;
+						
+						
+						for (int i=0; i<5; i++) {
+							ImageView card = positionArray[i].card;
+							if (card != null) {
+								Object tagPrime = card.getTag();
+								int idPrime = tagPrime == null? -1 : Integer.parseInt(tagPrime.toString());
+								if (idPrime == id) {
+									positionArray[i].card = null;
+								}
+							}
+						}
+						
+						boolean isAllNull = true;
+						for (int i=0; i<5; i++) {
+							ImageView card = positionArray[i].card;
+							if (card != null) {
+								isAllNull = false;
+							}
+						}
+						
+						if (isAllNull == true) {
+					         System.out.println(": no more cards, waiting for result.");
+					         InformPart("Waiting for result");
+						   	 sendUpdateEvent("Finish",null);
+						}
+				
+						// if no, pop up message and notify the player
+					}
+					return true;
+				}
+			});
+		}
+		
+	}
+	@Override
+	public boolean onKeyDown(int keyCode, KeyEvent event) {
+		
+		/*
+	    if (keyCode == KeyEvent.KEYCODE_BACK) {
+	        // your code
+	    	AlertDialog.Builder builder = new AlertDialog.Builder(this);
+
+			builder.setTitle("Back");
+			builder.setMessage("The game is running. Are you sure to quit!?")
+				   .setCancelable(false)
+				   .setPositiveButton("Yes,I quit..",new DialogInterface.OnClickListener() {
+						public void onClick(DialogInterface dialog,int id) {
+								//here you should end the game, return to screen
+							///send end message to all devices, include server and client..It is better to use a function...
+							 sendUpdateEvent("QUIT",null);
+						}
+				   })
+				   .setNegativeButton("Cancel",new DialogInterface.OnClickListener() {
+					@Override
+					public void onClick(DialogInterface dialog, int which) {
+						// TODO Auto-generated method stub
+						
+					}
+				});
+			AlertDialog  alert = builder.create();
+			alert.show(); 
+	        return true;
+	    }
+
+	*/
+	    return super.onKeyDown(keyCode, event);
+	}
+}

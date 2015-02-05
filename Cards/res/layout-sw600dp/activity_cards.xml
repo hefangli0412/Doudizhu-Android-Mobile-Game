@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/relativeLayout1"
+    android:layout_width="fill_parent"
+    android:layout_height="fill_parent"
+    android:background="@drawable/night" >
+
+    <ImageButton
+        android:id="@+id/start_button"
+        android:layout_width="360dp"
+        android:layout_height="70dp"
+        android:layout_marginTop="533dp"
+        android:layout_centerHorizontal="true"
+        android:text="ENTER"
+        android:textSize="30dp"
+        android:textColor="#AFFFFFFF"
+        android:background="@drawable/start_button" >
+    </ImageButton>
+
+    <ImageView
+        android:id="@+id/spades_7"
+        android:layout_width="150dp"
+        android:layout_height="220dp"
+        android:layout_marginTop="250dp"
+        android:layout_toLeftOf="@+id/joker"
+        android:src="@drawable/icon_7" />
+    
+    <ImageView
+        android:id="@+id/joker"
+        android:layout_width="135dp"
+        android:layout_height="200dp"
+        android:layout_marginTop="237dp"
+        android:layout_toLeftOf="@+id/hearts_5"
+        android:src="@drawable/icon_joker" />
+    
+    <ImageView
+        android:id="@+id/hearts_5"
+        android:layout_width="150dp"
+        android:layout_height="220dp"
+        android:layout_marginTop="218dp"
+        android:layout_centerHorizontal="true"
+        android:src="@drawable/icon_5" />
+    
+    <ImageView
+        android:id="@+id/clubs_2"
+        android:layout_width="150dp"
+        android:layout_height="222dp"
+        android:layout_marginTop="225dp"
+        android:layout_toRightOf="@+id/hearts_5"
+        android:src="@drawable/icon_2" />
+
+    <ImageView
+        android:id="@+id/diamonds_3"
+        android:layout_width="150dp"
+        android:layout_height="220dp"
+        android:layout_marginTop="250dp"
+        android:layout_toRightOf="@+id/clubs_2"
+        android:src="@drawable/icon_3" />
+
+
+</RelativeLayout>

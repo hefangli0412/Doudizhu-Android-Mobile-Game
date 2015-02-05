@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/night"
+    android:gravity="center"
+    android:orientation="vertical" >
+
+    <ImageView
+        android:id="@+id/paperImageView"
+        android:layout_width="420dp"
+        android:layout_height="320dp"
+        android:layout_marginLeft="10dp"
+        android:layout_marginTop="10dp"
+        android:src="@drawable/paper2" />
+
+    <ListView
+        android:id="@+id/roomList"
+        android:layout_width="300dp"
+        android:layout_height="146dp"
+        android:layout_marginLeft="60dp"
+        android:layout_marginTop="130dp"
+        android:gravity="center" >
+    </ListView>
+
+    <ImageButton
+        android:id="@+id/joinnewroom"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="0dp"
+        android:layout_marginLeft="0dp"
+        android:onClick="onJoinNewRoomClicked"
+        android:src="@drawable/start_button" >
+ </ImageButton>
+</RelativeLayout>

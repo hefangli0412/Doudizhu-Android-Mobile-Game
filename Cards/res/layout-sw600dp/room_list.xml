@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:gravity="center"
+    android:background="@drawable/night"
+    android:orientation="vertical" >
+
+    <ImageButton
+        android:id="@+id/joinnewroom"
+        android:layout_width="400dp"
+        android:layout_height="90dp"
+        android:onClick="onJoinNewRoomClicked"
+        android:background = "@drawable/hostgame_button" >
+    </ImageButton>
+
+    <ListView
+        android:id="@+id/roomList"
+        android:layout_width="300dp"
+        android:layout_height="wrap_content"
+        android:gravity="center" >
+    </ListView>
+
+</LinearLayout>
